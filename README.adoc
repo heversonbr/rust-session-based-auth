@@ -1,0 +1,117 @@
+= Session-based Authentication in Rust
+
+Session-based authentication provides a secure and efficient alternative to Basic authentication schemes.
+Unlike Basic authentication, where credentials are sent with every request, session-based authentication validates user credentials once and then uses session tokens for subsequent  requests.
+
+
+== Key Advantages
+
+* *Reduced network exposure*: Credentials (username and password) are transmitted only during the initial login, minimizing the risk of interception
+* *Improved performance*: Server validates credentials once during login; subsequent requests only require session ID validation
+* *Enhanced security*: Session IDs stored in cookies replace repeated credential transmission
+* *Stateful management*: Server maintains session state and securely hashed credentials, enabling easier session invalidation and logout
+* *Extra flexibility*: Sessions can store additional metadata (e.g., roles, permissions, expiration time, etc), allowing:
+role-based access control, permission management, configurable session expiration, prevention of session hijacking and other security threats.
+
+
+== Authentication flows
+
+The flow of session-based authentication process can be described according its distinct phases:
+
+=== User Registration (Sign-up) 
+
+. User submits username + password (over HTTPS only).
+. Server generates a random salt (e.g. 16–32 bytes).
+. Server hashes the password with a password hashing algorithm (bcrypt, Argon2, or scrypt), e.g., `hashed_password = bcrypt(password + salt)`
+. Server stores in DB: username,  hashed_password, salt (not secret, stored alongside the hash) and optional metadata (e.g. password version, created_at).
+
+NOTE: Storing only hashes prevents leaks from exposing real passwords.
+ 
+=== User Login (Sign-in) 
+
+. User submits username + password (over HTTPS).
+. Server looks up the stored record for that username.
+. Server retrieves salt and hashed_password.
+. Server recomputes bcrypt(submitted_password + salt).
+. If `computed hash == stored hash` → authentication succeeds.
+
+NOTE: Password is never stored or logged, only verified securely.
+
+
+
+=== Session Creation
+
+If successful authentication: 
+
+. Server generates a session ID (random, cryptographically strong).
+. Server stores session info in memory or DB (Redis, SQL, etc.).
+. Server sends the session ID back to the client in a cookie with `Set-Cookie`, remember these options:
+.. *HttpOnly*:  The cookie cannot be accessed by JavaScript, protects against XSS (Cross-Site Scripting) attacks.
+.. *Secure*: The cookie is only sent over HTTPS, never over plain HTTP, prevents session hijacking via network sniffing.
+.. *SameSite*=Strict or *SameSite*=Lax: Controls when cookies are sent in cross-site requests, prevents CSRF (Cross-Site Request Forgery) attacks. 
+
+.example 1: A session stored in memory or DB on the server could look like this
+[example]
+----
+{
+  "session_id": "abc123xyz",
+  "user_id": "42",
+  "expires_at": "2025-09-24T12:00:00Z",
+  "ip": "optional",
+  "user_agent": "optional"
+}
+----
+
+
+.example 2: A Server's response to a login request, providing session information
+[example]
+----
+HTTP/1.1 200 OK
+Set-Cookie: session_id=abc123xyz; HttpOnly; Secure;SameSite=Lax; Path=/; Max-Age=1800
+Content-Type: application/json
+----
+
+
+
+===  Subsequent Requests
+
+. Client includes the session cookie automatically.
+. Server (middleware) looks up the session ID in the sessionn store (memory or DB), verifies its validity,  attaches user identity to the request (e.g., this request comes from username: "alice", id: 42) before forwarding it to the request handler. 
+
+
+.example 3: One client's subsequent request should look like this
+[example]
+----
+GET /dashboard HTTP/1.1
+Host: example.com
+Cookie: session_id=abc123xyz
+----
+
+.example 4: Session middleware finds out session information from the Session Store
+[example]
+----
+{
+  "session_id": "abc123xyz",
+  "user_id": 42,
+  "username": "alice",
+  "roles": ["admin"],
+  "expires_at": "2025-09-24T12:00:00Z"
+}
+----
+
+NOTE: Passwordd never need to be re-sent, it only proves identity using the session ID.
+
+=== Session Expiration & Renewal
+
+. Sessions should expire after a reasonable time (e.g. 15-30 min inactivity, max 1-7 days).
+. On logout: 
+.. Server deletes session from server's Session Store.
+.. Server clears client's cookie:  server responds with `Set-Cookie: session_id=; Max-Age=0`
+. Any future request without a valid cookie is treated as user is `logged out`.
+
+
+== Session-based authentication in Rust with actix-web
+
+
+actix-session provides session management for actix-web applications
+	
