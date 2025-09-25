@@ -1,3 +1,5 @@
+:toc: left
+
 = Session-based Authentication in Rust
 
 Session-based authentication provides a secure and efficient alternative to Basic authentication schemes.
@@ -101,17 +103,76 @@ Cookie: session_id=abc123xyz
 
 NOTE: Passwordd never need to be re-sent, it only proves identity using the session ID.
 
-=== Session Expiration & Renewal
+=== Session Expiration and Renewal
 
 . Sessions should expire after a reasonable time (e.g. 15-30 min inactivity, max 1-7 days).
-. On logout: 
+. On logout
 .. Server deletes session from server's Session Store.
 .. Server clears client's cookie:  server responds with `Set-Cookie: session_id=; Max-Age=0`
 . Any future request without a valid cookie is treated as user is `logged out`.
 
 
-== Session-based authentication in Rust with actix-web
+== Session Auth with Rust and Actix Web
+
+// The `actix-session` is an easy-to-use general solution for managing sessions in applications built on top of Actix Web.
+// The SessionMiddleware is the middleware providing the actix-session functionalities. 
+// It takes care of all the session cookie handling and instructs the storage backend to create/delete/update the session state based on the operations performed against the active Session. SessionStore is the interface to retrieve and save the current session data from/to the chosen storage backend. actix-session provides some built-in storage backends: CookieSessionStore, RedisSessionStore, and RedisActorSessionStore. But you can create a custom storage backend by implementing the SessionStore trait if required. 
+
+The `actix-session` is a complete toolkit for handling user sessions in your Actix Web application. It's designed to make session management simple and flexible.
+
+=== Understanding actix-session Components
+
+==== The Three Main Components
+
+. *SessionMiddleware - The Traffic Controller*
+This is like a traffic controller that sits between your application and incoming requests. Every time a user makes a request, the SessionMiddleware:
+- Checks if they have a valid session cookie
+- Handles all the cookie creation, reading, and updating automatically
+- Tells the storage system when to save, load, or delete session data
+
+. *SessionStore - The Storage Interface*
+Think of this as a standardized filing cabinet system. No matter where you actually store your session data, the SessionStore provides the same simple interface to:
+- Save new session information
+- Retrieve existing session data
+- Update session details
+- Delete expired or invalid sessions
+
+. *Storage Backends - Where Data Actually Lives*
+`actix-session` comes with three ready-to-use storage options:
+.. `*CookieSessionStore*`: Stores session data directly in the browser cookie (good for small amounts of data)
+.. `*RedisSessionStore*`: Stores session data in a Redis database (recommended for production)
+.. `*RedisActorSessionStore*`: Similar to Redis but uses Actix actors for better performance
+
+NOTE: *Custom Storage*: You can create your own storage solution by implementing the `SessionStore` trait.
+
+==== How They Work Together
+. User makes a request → `SessionMiddleware` intercepts it
+. `SessionMiddleware` asks `SessionStore` to find the user's `Session` data
+. `SessionStore` retrieves data from the chosen storage backend
+. Your application processes the request with `Session` information available
+. Any `Session` changes get saved back through the same chain
+
+== Pratical Examples in Rust
+
+=== Simple Session-Based Authentication 
+
+This example demonstrates the core idea of session-based authentication without relying on Actix Web helper middlewares, such as actix-sessions, actix-identity, actix-cookies. 
+
+We intentionally keep it simple and build everything manually to show how session authentication works at the HTTP level:
+
+- We use a fake user database (i.e., a HashMap) to store `usernames` and `passwords`.
+- We use a simple server-side session store (i.e., a HashMap<session_id, username>) to store current session IDs.
+- We use a random ID generator to create session IDs. 
+- We manually set Cookie headers to send back to users.
+
+In this way, we try to show that sessions are basically a server-side lookup table and a cookie with a session ID on the client.
 
 
-actix-session provides session management for actix-web applications
-	
+Check the first example in: link:examples/minimal_session_based_auth.rs[examples/minimal_session_based_auth.rs]
+
+*Run the example*
+
+[source, bash]
+----
+$ cargo run --example minimal-session-auth-example
+---- 

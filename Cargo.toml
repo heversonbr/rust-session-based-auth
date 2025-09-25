@@ -5,3 +5,14 @@ edition = "2024"
 
 [dependencies]
 actix-session = "0.11.0"
+actix-web = "4.11.0"
+serde = "1.0.226"
+uuid = { version = "1.18.1", features = ["v4"] }
+
+[[example]]
+name = "minimal-session-auth-example"
+path = "examples/minimal_session_based_auth.rs"
+
+[[example]]
+name = "actix-session-auth-example" 
+path = "examples/actix_web_sessoin_based_auth.rs"
