@@ -2,10 +2,13 @@
 
 = Session-based Authentication in Rust
 
+[[sec-intro]]
+== Introduction 
+
 Session-based authentication provides a secure and efficient alternative to Basic authentication schemes.
 Unlike Basic authentication, where credentials are sent with every request, session-based authentication validates user credentials once and then uses session tokens for subsequent  requests.
 
-
+[[sec-advantages]]
 == Key Advantages
 
 * *Reduced network exposure*: Credentials (username and password) are transmitted only during the initial login, minimizing the risk of interception
@@ -15,11 +18,12 @@ Unlike Basic authentication, where credentials are sent with every request, sess
 * *Extra flexibility*: Sessions can store additional metadata (e.g., roles, permissions, expiration time, etc), allowing:
 role-based access control, permission management, configurable session expiration, prevention of session hijacking and other security threats.
 
-
+[[sec-flows]]
 == Authentication flows
 
 The flow of session-based authentication process can be described according its distinct phases:
 
+[[sec-signup]]
 === User Registration (Sign-up) 
 
 . User submits username + password (over HTTPS only).
@@ -29,6 +33,7 @@ The flow of session-based authentication process can be described according its 
 
 NOTE: Storing only hashes prevents leaks from exposing real passwords.
  
+[[sec-login]]
 === User Login (Sign-in) 
 
 . User submits username + password (over HTTPS).
@@ -39,8 +44,7 @@ NOTE: Storing only hashes prevents leaks from exposing real passwords.
 
 NOTE: Password is never stored or logged, only verified securely.
 
-
-
+[[sec-session-creation]]
 === Session Creation
 
 If successful authentication: 
@@ -74,7 +78,7 @@ Content-Type: application/json
 ----
 
 
-
+[[sec-subsequent-requests]]
 ===  Subsequent Requests
 
 . Client includes the session cookie automatically.
@@ -103,6 +107,7 @@ Cookie: session_id=abc123xyz
 
 NOTE: Passwordd never need to be re-sent, it only proves identity using the session ID.
 
+[[sec-expiration]]
 === Session Expiration and Renewal
 
 . Sessions should expire after a reasonable time (e.g. 15-30 min inactivity, max 1-7 days).
@@ -112,51 +117,112 @@ NOTE: Passwordd never need to be re-sent, it only proves identity using the sess
 . Any future request without a valid cookie is treated as user is `logged out`.
 
 
-== Session Auth with Rust and Actix Web
-
-// The `actix-session` is an easy-to-use general solution for managing sessions in applications built on top of Actix Web.
-// The SessionMiddleware is the middleware providing the actix-session functionalities. 
-// It takes care of all the session cookie handling and instructs the storage backend to create/delete/update the session state based on the operations performed against the active Session. SessionStore is the interface to retrieve and save the current session data from/to the chosen storage backend. actix-session provides some built-in storage backends: CookieSessionStore, RedisSessionStore, and RedisActorSessionStore. But you can create a custom storage backend by implementing the SessionStore trait if required. 
+[[sec-actix-middlewares]]
+== Session-based Authentication with Rust and Actix Web Middlewares
 
 The `actix-session` is a complete toolkit for handling user sessions in your Actix Web application. It's designed to make session management simple and flexible.
+The `SessionMiddleware` is the middleware providing the `actix-session` functionalities. 
 
-=== Understanding actix-session Components
+It takes care of all the session cookie handling and instructs the storage backend to create/delete/update the session state based on the operations performed against the active session. Sessions are backed by a `SessionStore`. 
+
+The `SessionStore` is the interface used to retrieve and save the current session data from/to the chosen storage backend. `actix-session` provides some built-in storage backends: `CookieSessionStore`, `RedisSessionStore`, and `RedisActorSessionStore`. 
+
+But you can create a custom storage backend by implementing the `SessionStore` trait if required. 
+
+
+[[sec-actix-components]]
+=== Understanding Actix Session Components
 
 ==== The Three Main Components
 
-. *SessionMiddleware - The Traffic Controller*
+. *SessionMiddleware - The Traffic Controller*  
 This is like a traffic controller that sits between your application and incoming requests. Every time a user makes a request, the SessionMiddleware:
 - Checks if they have a valid session cookie
 - Handles all the cookie creation, reading, and updating automatically
 - Tells the storage system when to save, load, or delete session data
 
-. *SessionStore - The Storage Interface*
+. *SessionStore - The Storage Interface*  
 Think of this as a standardized filing cabinet system. No matter where you actually store your session data, the SessionStore provides the same simple interface to:
 - Save new session information
 - Retrieve existing session data
 - Update session details
 - Delete expired or invalid sessions
 
-. *Storage Backends - Where Data Actually Lives*
+. *Storage Backends - Where Data Actually Lives*  
 `actix-session` comes with three ready-to-use storage options:
-.. `*CookieSessionStore*`: Stores session data directly in the browser cookie (good for small amounts of data)
-.. `*RedisSessionStore*`: Stores session data in a Redis database (recommended for production)
-.. `*RedisActorSessionStore*`: Similar to Redis but uses Actix actors for better performance
+.. `*CookieSessionStore*`: Stores session data directly in the browser cookie (good for small amounts of data)  
+.. `*RedisSessionStore*`: Stores session data in a Redis database (recommended for production)  
+.. `*RedisActorSessionStore*`: Similar to Redis but uses Actix actors for better performance  
 
 NOTE: *Custom Storage*: You can create your own storage solution by implementing the `SessionStore` trait.
 
 ==== How They Work Together
-. User makes a request → `SessionMiddleware` intercepts it
-. `SessionMiddleware` asks `SessionStore` to find the user's `Session` data
-. `SessionStore` retrieves data from the chosen storage backend
-. Your application processes the request with `Session` information available
-. Any `Session` changes get saved back through the same chain
+. User makes a request → `SessionMiddleware` intercepts it  
+. `SessionMiddleware` asks `SessionStore` to find the user's `Session` data  
+. `SessionStore` retrieves data from the chosen storage backend  
+. Your application processes the request with `Session` information available  
+. Any `Session` changes get saved back through the same chain  
 
+
+
+[[sec-actix-identity]]
+=== Extending Sessions with actix-identity
+
+While `actix-session` handles raw session state, the `actix-identity` crate adds a higher-level abstraction for *user authentication*.  
+
+- It builds on top of `actix-session` to store a user identity (e.g., a username or user ID).  
+- Instead of manually writing and reading from the session, you use the `Identity` extractor:  
+
+[source,rust]
+----
+Identity::login(&req.extensions(), "user123".to_owned());
+
+if let Some(id) = Identity::identity(&req.extensions()) {
+    println!("Logged in as: {}", id);
+}
+----
+
+This makes login/logout flows much simpler and avoids boilerplate session handling.  
+
+
+[[sec-actix-cookies]]
+=== Low-Level Control with actix-cookies
+
+Both `actix-session` and `actix-identity` rely on cookies under the hood. The `actix-cookies` crate is the **low-level building block** for cookie handling in Actix.  
+
+It provides:
+- A `Cookie` type to create and parse cookies
+- Middleware to read cookies from incoming requests
+- Helpers to set secure cookies in responses  
+
+For example, you can directly manipulate cookies if you need full control outside the session system:  
+
+[source,rust]
+----
+HttpResponse::Ok()
+    .cookie(Cookie::new("custom_token", "abc123"))
+    .finish()
+----
+
+This is particularly useful when you want to set extra cookies alongside session management, or for implementing custom authentication schemes.  
+
+
+=== Takeaways
+
+- `actix-cookies`: Low-level cookie utilities (read/write cookies).  
+- `actix-session`: Middleware for managing user session state.  
+- `actix-identity`: High-level identity and login/logout abstraction built on top of sessions.  
+
+Together, these crates form a flexible stack for authentication in Actix Web applications.
+
+
+[[sec-pratical-examples]]
 == Pratical Examples in Rust
 
+[[sec-minimal-example]]
 === Simple Session-Based Authentication 
 
-This example demonstrates the core idea of session-based authentication without relying on Actix Web helper middlewares, such as actix-sessions, actix-identity, actix-cookies. 
+This is a didactial example that demonstrates the core idea of session-based authentication without relying on Actix Web helper middlewares, such as actix-sessions, actix-identity or actix-cookies. 
 
 We intentionally keep it simple and build everything manually to show how session authentication works at the HTTP level:
 
@@ -208,6 +274,16 @@ curl http://127.0.0.1:8080/logout -b cookie.txt -c cookie.txt
 For each test we can check the cookie upated in the file `cookie.txt`.
 
 
-=== Session-Based Authentication with Actix Web
+=== Session-Based Authentication in Actix-Web (with Middlewares)
 
-NOTE: WIP (coming soon)
+In the previous example we built a minimal session-based authentication system from scratch.
+We manually generated session IDs, manually inserted cookies (Set-Cookie headers), manually parsed cookies from requests, etc.
+
+That is a good first step for learning the fundamentals, but in real applications you don't need to implement all of that yourself. Why not? In real applications: 
+
+- Cookies should be signed and encrypted to prevent tampering. 
+- Passwords must be encrypted, we never store plain-text passwords.
+- Sessions should support expiration and rotation.
+- Identity should be easy to store and retrieve.
+- Ideally, prevent brute-force attacks by limiting login attempts, temporarily locking accounts after multiple failures, and  logging and monitoring of login attempts.
+
