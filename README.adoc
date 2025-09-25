@@ -170,9 +170,44 @@ In this way, we try to show that sessions are basically a server-side lookup tab
 
 Check the first example in: link:examples/minimal_session_based_auth.rs[examples/minimal_session_based_auth.rs]
 
-*Run the example*
+*Run the example with*
 
 [source, bash]
 ----
-$ cargo run --example minimal-session-auth-example
+cargo run --example minimal-session-auth-example
 ---- 
+
+
+*Testing with curl*
+
+1) Login (POST JSON):  
+[source, bash]
+----
+curl -X POST http://127.0.0.1:8080/login \
+     -H "Content-Type: application/json" \
+     -d '{"username":"alice", "password":"password123"}' \
+     -c cookie.txt
+----
+
+NOTE: *`-c cookies.txt`* → Stores overwrite or append any cookies received from the server into cookies.txt
+
+2) Get user status (GET):
+[source, bash]
+----
+curl http://127.0.0.1:8080/me -b cookie.txt
+----
+
+NOTE: *`-b cookies.txt`* → Reads cookies from the file cookies.txt and includes them in the request
+
+3) Logout:
+[source, bash]
+----
+curl http://127.0.0.1:8080/logout -b cookie.txt -c cookie.txt
+----
+
+For each test we can check the cookie upated in the file `cookie.txt`.
+
+
+=== Session-Based Authentication with Actix Web
+
+NOTE: WIP (coming soon)
