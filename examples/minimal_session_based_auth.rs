@@ -4,7 +4,6 @@ use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use uuid::Uuid;
 
-
 /// Shared app state that provides:
 /// - `users`: fake user database (username → password)
 /// - `sessions`: server-side session database (session_id → username)
@@ -22,7 +21,7 @@ struct LoginRequest {
     password: String,
 }
 
-/// --- LOGIN ---
+/// LOGIN 
 /// 1. Verify credentials against fake DB.
 /// 2. If valid, generate a random session_id (UUID).
 /// 3. Store it in the server-side sessions HashMap.
@@ -59,7 +58,7 @@ async fn login(data: web::Data<AppState>, creds: web::Json<LoginRequest>) -> imp
     HttpResponse::Unauthorized().body("Invalid credentials")
 }
 
-/// --- STATUS (current user) ---
+/// STATUS
 /// 1. Read `session_id` cookie from request `Cookie` header.
 /// 2. Look up session_id in sessions DB.
 /// 3. If found, return username.
@@ -89,7 +88,7 @@ async fn status(data: web::Data<AppState>, req: HttpRequest) -> impl Responder {
 }
 
 
-/// --- LOGOUT ---
+/// LOGOUT
 /// 1. Read `session_id` from `Cookie` header.
 /// 2. Remove `session_id` from sessions DB.
 /// 3. Clear cookie in response: Send back a `Set-Cookie` that expires the cookie.
@@ -107,7 +106,6 @@ async fn logout(data: web::Data<AppState>, req: HttpRequest) -> impl Responder {
                     let mut sessions = data.sessions.lock().unwrap();
                     println!("Removing session {:?} from session store", &value);
                     sessions.remove(value);
-//println!("");
                     // Expire cookie manually
                     let expired_cookie =
                         "session_id=; HttpOnly; Path=/; Max-Age=0".to_string();
@@ -131,7 +129,7 @@ async fn main() -> std::io::Result<()> {
 
      // Create our Fake user DB
     let mut fake_users = HashMap::new();
-    println!("Creating users alice and bob...");
+    println!("Creating credentials mock Database for users alice and bob...");
     fake_users.insert("alice".to_string(), "password123".to_string());
     fake_users.insert("bob".to_string(), "password321".to_string());
 
@@ -144,7 +142,9 @@ async fn main() -> std::io::Result<()> {
     println!("Starting Server at 127.0.0.1 8080...");
     HttpServer::new(move || {
         App::new()
+            // App state (our databases)
             .app_data(web::Data::new(appstate.clone()))
+            // Routes
             .service(login)
             .service(status)
             .service(logout)

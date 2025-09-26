@@ -137,16 +137,16 @@ But you can create a custom storage backend by implementing the `SessionStore` t
 
 . *SessionMiddleware - The Traffic Controller*  
 This is like a traffic controller that sits between your application and incoming requests. Every time a user makes a request, the SessionMiddleware:
-- Checks if they have a valid session cookie
-- Handles all the cookie creation, reading, and updating automatically
-- Tells the storage system when to save, load, or delete session data
+.. Checks if they have a valid session cookie
+.. Handles all the cookie creation, reading, and updating automatically
+.. Tells the storage system when to save, load, or delete session data
 
 . *SessionStore - The Storage Interface*  
 Think of this as a standardized filing cabinet system. No matter where you actually store your session data, the SessionStore provides the same simple interface to:
-- Save new session information
-- Retrieve existing session data
-- Update session details
-- Delete expired or invalid sessions
+.. Save new session information
+.. Retrieve existing session data
+.. Update session details
+.. Delete expired or invalid sessions
 
 . *Storage Backends - Where Data Actually Lives*  
 `actix-session` comes with three ready-to-use storage options:
@@ -233,6 +233,7 @@ We intentionally keep it simple and build everything manually to show how sessio
 
 In this way, we try to show that sessions are basically a server-side lookup table and a cookie with a session ID on the client.
 
+*Example code*
 
 Check the first example in: link:examples/minimal_session_based_auth.rs[examples/minimal_session_based_auth.rs]
 
@@ -274,7 +275,7 @@ curl http://127.0.0.1:8080/logout -b cookie.txt -c cookie.txt
 For each test we can check the cookie upated in the file `cookie.txt`.
 
 
-=== Session-Based Authentication in Actix-Web (with Middlewares)
+=== Session-Based Authentication with Actix-Web Middlewares
 
 In the previous example we built a minimal session-based authentication system from scratch.
 We manually generated session IDs, manually inserted cookies (Set-Cookie headers), manually parsed cookies from requests, etc.
@@ -286,4 +287,13 @@ That is a good first step for learning the fundamentals, but in real application
 - Sessions should support expiration and rotation.
 - Identity should be easy to store and retrieve.
 - Ideally, prevent brute-force attacks by limiting login attempts, temporarily locking accounts after multiple failures, and  logging and monitoring of login attempts.
+
+This is where Actix middlewares come in.
+As we presented in the section <<sec-actix-middlewares>>, 
+Actix Web handles the tedious details of the authentication process while we can focus on the application business logic.
+
+NOTE: Remember, a Middleware is registered for each App, Scope, or Resource and executed in opposite order as registration.
+
+
+In this example we show a closer to production implementation of a session-based authentication mechanism with Actix-Web using its built-in middlewares.
 
