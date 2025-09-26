@@ -246,34 +246,61 @@ cargo run --example minimal-session-auth-example
 ---- 
 
 
-*Testing with curl*
+*Test with curl*
 
-1) Login (POST JSON):  
+- Login (POST JSON):
++
+.login alice
 [source, bash]
 ----
-curl -X POST http://127.0.0.1:8080/login \
-     -H "Content-Type: application/json" \
-     -d '{"username":"alice", "password":"password123"}' \
-     -c cookie.txt
+curl -v -X POST http://127.0.0.1:8080/login \
+        -H "Content-Type: application/json" \
+        -d '{"username":"alice", "password":"password123"}' \
+        -c cookie_alice.txt
 ----
-
++
+.login bob
+[source, bash]
+----
+curl -v -X POST http://127.0.0.1:8080/login \
+        -H "Content-Type: application/json" \ 
+        -d '{"username":"bob","password":"password321"}'\
+        -c cookie_bob.txt \
+----
++
 NOTE: *`-c cookies.txt`* → Stores overwrite or append any cookies received from the server into cookies.txt
-
-2) Get user status (GET):
++
+- Check user status (GET):
++
+.status alice
 [source, bash]
 ----
-curl http://127.0.0.1:8080/me -b cookie.txt
+ curl -v  http://127.0.0.1:8080/status -b cookie_alice.txt
 ----
-
++
+.status bob
+[source, bash]
+----
+ curl -v  http://127.0.0.1:8080/status -b cookie_bob.txt
+----
++
 NOTE: *`-b cookies.txt`* → Reads cookies from the file cookies.txt and includes them in the request
-
-3) Logout:
++
+- Logout:
++
+.logout alice
 [source, bash]
 ----
-curl http://127.0.0.1:8080/logout -b cookie.txt -c cookie.txt
+curl -v -X POST http://127.0.0.1:8080/logout -b cookie_alice.txt -c cookie_alice.txt
+----
++
+.logout bob
+[source, bash]
+----
+curl -v -X POST http://127.0.0.1:8080/logout -b cookie_bob.txt -c cookie_bob.txt
 ----
 
-For each test we can check the cookie upated in the file `cookie.txt`.
+NOTE: At each test, we can check the cookie being upated in the cookie file: `cookie_<alice||bob>.txt`.
 
 
 === Session-Based Authentication with Actix-Web Middlewares

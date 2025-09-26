@@ -24,8 +24,7 @@ impl AppState {
         {
             let mut map = users_db.lock().unwrap();
             map.insert("alice".to_string(), "password123".to_string());
-            map.insert("bob".to_string(), "secret456".to_string());
-            map.insert("charlie".to_string(), "mypassword".to_string());
+            map.insert("bob".to_string(), "password321".to_string());
         }
         AppState { users_db }
     }
