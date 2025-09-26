@@ -1,4 +1,5 @@
 :toc: left
+:toclevels: 3
 
 = Session-based Authentication in Rust
 
@@ -294,6 +295,27 @@ Actix Web handles the tedious details of the authentication process while we can
 
 NOTE: Remember, a Middleware is registered for each App, Scope, or Resource and executed in opposite order as registration.
 
+The next didactic example demonstrates how to implement session-based authentication in Actix Web using the built-in helper middlewares: actix-session and actix-identity.
+Instead of manually setting and parsing cookies, we let the middlewares handle the heavy lifting:
 
-In this example we show a closer to production implementation of a session-based authentication mechanism with Actix-Web using its built-in middlewares.
+- SessionMiddleware takes care of securely serializing session data into cookies (signing/encrypting them with a secret key).
+- IdentityMiddleware builds on top of sessions and provides a simple API (login, logout, identity) to manage the current user’s identity.
+- We still use a fake user database (a HashMap) for demonstration purposes.
+- On login, we validate the credentials and call Identity::login to store the user in the session.
+- On subsequent requests, the identity can be retrieved with Identity::identity.
+- On logout, we call logout to remove the identity from the session.
+
+In this way, we show that authentication becomes much simpler when relying on Actix’s session and identity middlewares, we don't deal with raw cookies, just high-level APIs.
+
+*Example code*
+
+Check the example in:
+link:examples/actix_web_session_based_auth.rs[examples/actix_web_session_based_auth.rs]
+
+*Run the example with*
+
+[source, bash]
+----
+cargo run --example actix-session-auth-example
+---- 
 

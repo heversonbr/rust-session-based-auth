@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 use env_logger::Env;
 use log::{debug, info, error};
 
-/// --- Application State ---
+/// APP STATE
 /// For demonstration, we simulate a "user database" in memory.
 /// In production, this would be a real database (Postgres, MySQL, etc.).
 #[derive(Clone, Debug)]
@@ -50,7 +50,7 @@ impl AppState {
 
 }
 
-/// Struct representing the login request payload.
+/// STRUCT representing the login request payload.
 /// Example: { "username": "alice", "password": "password123" }
 #[derive(Deserialize, Debug)]
 struct LoginRequest {
@@ -58,7 +58,7 @@ struct LoginRequest {
     password: String,
 }
 
-/// Struct representing the http response payload.
+/// STRUCT representing the http response payload.
 /// Example: { "username": "alice", "password": "password123" }
 #[derive(Serialize, Debug)]
 struct StatusResponse {
@@ -174,11 +174,10 @@ async fn logout(identity: Option<Identity>)  -> impl Responder {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-
-    info!("Running Example 2: Session-based authentication with Actix Middlewares");
      // Set default log level to debug
     env_logger::Builder::from_env(Env::default().default_filter_or("debug")).init();
-
+    info!("Running Example 2: Session-based authentication with Actix Middlewares");
+    
     // Generate a secret key for cookie signing & encryption.
     // In production, this should be a constant value loaded from config or a file
     let secret_key = Key::generate();
@@ -188,7 +187,6 @@ async fn main() -> std::io::Result<()> {
     let users_state = AppState::new();
     debug!("AppState initialized: user and session DBs...");
     info!("Starting Server at 127.0.0.1 8080...");
-
     HttpServer::new(move || {
         App::new()
             // state is our AppState: with users database
