@@ -309,8 +309,9 @@ In this way, we show that authentication becomes much simpler when relying on Ac
 
 *Example code*
 
-Check the example in:
-link:examples/actix_web_session_based_auth.rs[examples/actix_web_session_based_auth.rs]
+Check the example in: link:examples/actix_web_sessoin_based_auth.rs[examples/actix_web_sessoin_based_auth.rs]
+
+
 
 *Run the example with*
 
