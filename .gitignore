@@ -4,3 +4,4 @@ Cargo.lock
 /diagram
 cookie.txt
 .vscode/
+/tests
