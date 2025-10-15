@@ -1,5 +1,7 @@
 :toc: left
 :toclevels: 3
+:source-highlighter: rouge
+:linenums:
 
 = Session-based Authentication in Rust
 
@@ -27,7 +29,7 @@ The flow of session-based authentication process can be described according its 
 [[sec-signup]]
 === User Registration (Sign-up) 
 
-. User submits username + password (over HTTPS only).
+. User submits username + password over HTTPS (https only).
 . Server generates a random salt (e.g. 16–32 bytes).
 . Server hashes the password with a password hashing algorithm (bcrypt, Argon2, or scrypt), e.g., `hashed_password = bcrypt(password + salt)`
 . Server stores in DB: username,  hashed_password, salt (not secret, stored alongside the hash) and optional metadata (e.g. password version, created_at).
@@ -106,7 +108,7 @@ Cookie: session_id=abc123xyz
 }
 ----
 
-NOTE: Passwordd never need to be re-sent, it only proves identity using the session ID.
+NOTE: Password never need to be re-sent, it only proves identity using the session ID.
 
 [[sec-expiration]]
 === Session Expiration and Renewal
@@ -303,6 +305,7 @@ curl -v -X POST http://127.0.0.1:8080/logout -b cookie_bob.txt -c cookie_bob.txt
 NOTE: At each test, we can check the cookie being upated in the cookie file: `cookie_<alice||bob>.txt`.
 
 
+[[sec-auth-with-middleware]]
 === Session-Based Authentication with Actix-Web Middlewares
 
 In the previous example we built a minimal session-based authentication system from scratch.
@@ -318,27 +321,33 @@ That is a good first step for learning the fundamentals, but in real application
 
 This is where Actix middlewares come in.
 As we presented in the section <<sec-actix-middlewares>>, 
-Actix Web handles the tedious details of the authentication process while we can focus on the application business logic.
+Actix Web middlewares handle the tedious details of the authentication process while we can focus on the application business logic.
 
 NOTE: Remember, a Middleware is registered for each App, Scope, or Resource and executed in opposite order as registration.
 
-The next didactic example demonstrates how to implement session-based authentication in Actix Web using the built-in helper middlewares: actix-session and actix-identity.
-Instead of manually setting and parsing cookies, we let the middlewares handle the heavy lifting:
+[[sec-outofthebox-middleware]]
+==== Out-of-the-box Authentication Middlewares
 
-- SessionMiddleware takes care of securely serializing session data into cookies (signing/encrypting them with a secret key).
-- IdentityMiddleware builds on top of sessions and provides a simple API (login, logout, identity) to manage the current user’s identity.
+Actix-web provides several useful middleware out of the box.
+The next example didactically demonstrates how to implement session-based authentication in Actix Web using some of these provided built-in helper middlewares: 
+
+- *actix-session*, and 
+- *actix-identity*
+
+Instead of manually setting and parsing cookies, we let the middlewares handle some heavy lifting (e.g.,validation, DB lookups).
+
+- *SessionMiddleware* takes care of securely serializing session data into cookies (signing/encrypting them with a secret key).
+- *IdentityMiddleware* builds on top of sessions and provides a simple API (login, logout, identity) to manage the current user's identity.
 - We still use a fake user database (a HashMap) for demonstration purposes.
 - On login, we validate the credentials and call Identity::login to store the user in the session.
 - On subsequent requests, the identity can be retrieved with Identity::identity.
 - On logout, we call logout to remove the identity from the session.
 
-In this way, we show that authentication becomes much simpler when relying on Actix’s session and identity middlewares, we don't deal with raw cookies, just high-level APIs.
+In this way, we show that authentication becomes much simpler when relying on Actix's session and identity middlewares, we do not deal with raw cookies, just high-level APIs.
 
 *Example code*
 
-Check the example in: link:examples/actix_web_sessoin_based_auth.rs[examples/actix_web_sessoin_based_auth.rs]
-
-
+Check the example in: link:examples/actix_web_session_based_auth_with_middleware.rs[examples/actix_web_session_based_auth_with_middleware.rs]
 
 *Run the example with*
 
@@ -347,3 +356,93 @@ Check the example in: link:examples/actix_web_sessoin_based_auth.rs[examples/act
 cargo run --example actix-session-auth-example
 ---- 
 
+==== Improved use of Authentication Middlewares with Extractors
+
+While we can enforce security with just middleware, some drawbacks will exist concerning the code clarity, maintainability, and handler _purity_ (i.e., clean handler signatures). 
+
+Remind, handlers handle logic: The primary job of your route handlers (e.g., login, status, logout) is to execute the business logic (e.g., retrieving profile data, processing a payment). They should not be concerned with how a user was authenticated.
+
+For instance, in the previous example link:examples/actix_web_sessoin_based_auth_with_middleware.rs[session based authentication with middlewares], although we use *SessionMiddleware* and *IdentityMiddleware* for intercepting requests, reading cookies, validating sessions and identities we still need to perform authentication operations in the handler before performing its own logic. 
+Check the `status` route: 
+
+[source, rust, linenums]
+----
+async fn status(identity: Option<Identity>) -> impl Responder {
+    match identity {
+        Some(user) => match user.id() {
+            Ok(user_id) => {
+                ...  // [ Handler logic ] 
+            }
+            Err(err) => {
+                error!("Failed to read ID from session: {}", err);
+                ...
+            }
+        },
+        None => {
+            error!("No identity found in Request");
+            ...
+        }
+    }
+}
+----
+
+This will definitely create high verbosity and duplications.
+If you have 50 protected routes, you duplicate the authentication check 50 times. That is, every protected handler must contain a bulky block such as:
+
+[source, rust, linenums]
+----
+match identity {
+  Some(user) => match user.id() {
+      Ok(user_id) => { [Handles logic] }
+      Err(err) => { error!("Failed to read ID from session: {}", err);... }
+  },
+  None => { error!("No identity found in Request"); ... }
+}
+----
+
+Any change to the authentication logic will require 50 updates.
+
+Middleware's Limitation: It performs necessary preparation, but generally allows the request to continue to the handler unless configured with highly specific, hard-to-maintain logic. It focuses on state management, not access enforcement.
+
+*Extractors*
+
+The primary goal of the Extractor pattern is to separate the security concern from the business logic.
+Extractors (e.g., AuthUser, AdminUser) are the Route Guards that leverage the work done by the middleware. They implement the Actix-web FromRequest trait, allowing them to intercept the request flow right before the handler is called.
+
+. *Centralized Enforcement*:  
+.. *Improvement*: The Extractor's primary role is to enforce a precondition for the handler.
+.. *Mechanism*: The AuthUser extractor checks the request extensions for the identity placed there by the IdentityMiddleware.
+... If the identity is present, the extractor succeeds, and the request continues.
+... If the identity is absent, the extractor immediately fails by returning an error (e.g., ErrorUnauthorized), and Actix-web automatically short-circuits the request and sends the `401 response`.
+.. *Design Benefit*: This centralizes the security policy. The application guarantees that if a handler takes an AuthUser, the user must be logged in. No handler can forget the check.
+. *Cleaner Handler Signatures* (The "Purity" Role):
+.. *Improvement*: Extractors dramatically reduce code verbosity and duplication.
+.. *Mechanism*: Instead of every protected handler needing boilerplate, the handler becomes perfectly clean.
+. *Role-Based Access Control* (The "Authorization" Role)
+
+.. *Improvement*: Extractors allow for easy implementation of Authorization (checking what an authenticated user is allowed to do).
+.. *Mechanism*: The `AdminUser` extractor builds on `AuthUser`. It not only checks for a login but also queries the application state (`AppState`) to verify the user's role. If the role check fails, it returns a `403 Forbidden` error.
+.. *Design Benefit*: This establishes a clean `Authorization Guard` pattern, making it trivial to secure routes based on user privileges without polluting the handler logic.
+
+This example centralizes the security logic using a custom `Extractor` (for authentication) and an `Identity Extractor Guard` (for role-based access control), which is a powerful and clean design pattern for scalable applications.
+
+- Authentication Extractor (`AuthUser`): Ensures a user is logged in (`HTTP 401` if not).
+- Role Guard Extractor (`AdminUser`): Builds on top of `AuthUser` and enforces a specific role (`HTTP 403` if not an `admin`).
+- `App State` for Roles: Simulates database user roles for checking permissions.
+- We modify the `AppState` to include roles and create the new Extractors.
+
+*Example code* 
+
+Check the example in: link:examples/actix_web_session_based_auth_advanced_middlware.rs[examples/actix_web_session_based_auth_advanced_middlware.rs]
+
+.Example routes 
+[cols="1,1,1,1,1,2", options="header"]
+|===
+| Action | Route | Required Extractor | Result | HTTP Code | Notes
+
+| Anonymous | /profile | AuthUser | Extraction fails | 401 Unauthorized | Fails because no session/identity exists.
+| Login | /login | None | Success | 200 OK | Creates the session/identity cookie.
+| Alice | /profile | AuthUser | Success | 200 OK | Authenticated and granted access.
+| Alice | /admin | AdminUser | Extraction fails | 403 Forbidden | Authenticated, but fails the role check.
+| Bob | /admin | AdminUser | Success | 200 OK | Authenticated and passes the role check.
+|===

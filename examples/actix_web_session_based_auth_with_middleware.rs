@@ -193,8 +193,11 @@ async fn main() -> std::io::Result<()> {
             // To start using identity management in your Actix Web application you must register 
             // IdentityMiddleware and SessionMiddleware as middleware on your App.
             // IdentityMiddleware builds on top of SessionMiddleware 
-            // The session middleware must be mounted AFTER the identity middleware: `actix-web` invokes middleware in the OPPOSITE
-            // order of registration when it receives an incoming request.
+            // NOTE: actix-web invokes middleware in the REVERSE order of registration on incoming requests 
+            // and the FORWARD order on outgoing responses. The SessionMiddleware must run before IdentityMiddleware 
+            // on the way in so the session data is ready for IdentityMiddleware to read. 
+            // Therefore, SessionMiddleware must be registered after IdentityMiddleware 
+            // to ensure correct reverse order processing.
             .wrap(IdentityMiddleware::default())
             // SessionMiddleware handles session cookies automatically
             .wrap(SessionMiddleware::new(      // 

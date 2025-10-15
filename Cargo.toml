@@ -18,4 +18,9 @@ path = "examples/minimal_session_based_auth.rs"
 
 [[example]]
 name = "actix-session-auth-example" 
-path = "examples/actix_web_sessoin_based_auth.rs"
+path = "examples/actix_web_sessoin_based_auth_with_middleware.rs"
+
+
+[[example]]
+name = "actix-session-auth-example-advanced-middleware" 
+path = "examples/actix_web_sessoin_based_auth_advanced_middleware.rs"
