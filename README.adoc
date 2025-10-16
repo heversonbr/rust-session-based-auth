@@ -1,7 +1,5 @@
-:toc: left
 :toclevels: 3
-:source-highlighter: rouge
-:linenums:
+:toc: left
 
 = Session-based Authentication in Rust
 
@@ -609,4 +607,4 @@ NOTE: *`-b cookies.txt`* → Reads cookies from the file cookies.txt and include
 
 - Establishes a clean Authorization Guard pattern, making it trivial to secure routes based on user privileges without polluting the handler logic.
 
-In summary, the `Middleware` sets the stage by handling the session mechanics, while the `Extractor` steps in as the gatekeeper to enforce the security policy defined for each specific route.
+In summary, the `Middleware` sets the stage by handling the session mechanics, while the `Extractor` steps in as the gatekeeper to enforce the security policy defined for each specific route. As a next step, we could think about improving the security by encrypting the credentials. 
