@@ -434,6 +434,12 @@ And we use `AuthUser` / `AdminUser` (Extractors) as the route guard to enforce s
 
 Check the example in: link:examples/actix_web_session_based_auth_advanced_middlware.rs[examples/actix_web_session_based_auth_advanced_middlware.rs]
 
+*Run the example with*
+
+[source, bash]
+----
+cargo run --example actix-session-auth-example-advanced-middleware
+---- 
 
 .Routes used in this example 
 [cols="1,1,1,1,1,2", options="header"]
@@ -450,7 +456,6 @@ Check the example in: link:examples/actix_web_session_based_auth_advanced_middlw
 
 
 *Test with curl*
-
 
 .check public route
 [source, bash]
