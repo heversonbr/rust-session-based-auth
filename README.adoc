@@ -400,9 +400,7 @@ match identity {
 }
 ----
 
-Any change to the authentication logic will require 50 updates.
-
-Middleware's Limitation: It performs necessary preparation, but generally allows the request to continue to the handler unless configured with highly specific, hard-to-maintain logic. It focuses on state management, not access enforcement.
+Any change to the authentication logic will require 50 updates to fix each protected route.
 
 *Extractors*
 
@@ -424,10 +422,13 @@ Extractors (e.g., AuthUser, AdminUser) are the Route Guards that leverage the wo
 .. *Mechanism*: The `AdminUser` extractor builds on `AuthUser`. It not only checks for a login but also queries the application state (`AppState`) to verify the user's role. If the role check fails, it returns a `403 Forbidden` error.
 .. *Design Benefit*: This establishes a clean `Authorization Guard` pattern, making it trivial to secure routes based on user privileges without polluting the handler logic.
 
-This example centralizes the security logic using a custom `Extractor` (for authentication) and an `Identity Extractor Guard` (for role-based access control), which is a powerful and clean design pattern for scalable applications.
+The next example centralizes the security logic using two extractors: a custom `Extractor` (for authentication) and an Identity `Extractor Guard` (for role-based access control), which is a powerful and clean design pattern for scalable applications. These two structs implement `actix_web::FromRequest` to enforce security rules before the handler runs.
 
-- Authentication Extractor (`AuthUser`): Ensures a user is logged in (`HTTP 401` if not).
-- Role Guard Extractor (`AdminUser`): Builds on top of `AuthUser` and enforces a specific role (`HTTP 403` if not an `admin`).
+We use `SessionMiddleware` + `IdentityMiddleware` (Middleware) to handle cookies and prepare the identity object.
+And we use `AuthUser` / `AdminUser` (Extractors) as the route guard to enforce security and provide clean user data to the handler.
+
+- The Authentication Extractor (`AuthUser`): Ensures a user is logged in (`HTTP 401` Unauthorized if no identity is present.).
+-The Role-Based Guard Extractor (`AdminUser`): Builds on top of `AuthUser` and enforces a specific role (It fails with `HTTP 403 Forbidden` if the user is authenticated but lacks the necessary role).
 - `App State` for Roles: Simulates database user roles for checking permissions.
 - We modify the `AppState` to include roles and create the new Extractors.
 
@@ -435,7 +436,8 @@ This example centralizes the security logic using a custom `Extractor` (for auth
 
 Check the example in: link:examples/actix_web_session_based_auth_advanced_middlware.rs[examples/actix_web_session_based_auth_advanced_middlware.rs]
 
-.Example routes 
+
+.Routes used in this example 
 [cols="1,1,1,1,1,2", options="header"]
 |===
 | Action | Route | Required Extractor | Result | HTTP Code | Notes
@@ -446,3 +448,165 @@ Check the example in: link:examples/actix_web_session_based_auth_advanced_middlw
 | Alice | /admin | AdminUser | Extraction fails | 403 Forbidden | Authenticated, but fails the role check.
 | Bob | /admin | AdminUser | Success | 200 OK | Authenticated and passes the role check.
 |===
+
+
+
+*Test with curl*
+
+
+.check public route
+[source, bash]
+----
+curl -v http://127.0.0.1:8080/   
+
+# access public route
+# Returns: 200 OK -> Welcome to the public homepage. 
+----
+
+
+.Try to access a profile without logging in (Anonymous)
+[source, bash]
+----
+curl -v http://127.0.0.1:8080/profile   
+ 
+# Fails because no session/identity exists.
+# Returns: 401 Unauthorized -> Login Required
+----
+
+
+.login Alice
+[source, bash]
+----
+curl -v POST http://127.0.0.1:8080/login \
+     -H "Content-Type: application/json" \
+     -d '{"username":"alice", "password":"password123"}' \
+     -c cookie_alice.txt
+
+# Creates the session/identity cookie. 
+# -c: stores returned cookie in cookie_alice.txt
+# Returns: 200 OK
+# {
+#   "authenticated":true,
+#   "user_id":"alice",
+#   "role":"User",
+#   "message":"Login successful"
+# }
+----
+
+.checks Alice's authentication and granted access
+[source, bash]
+----
+curl -v http://127.0.0.1:8080/profile -b cookie_alice.txt
+
+# Authenticated and granted access to alice's private profile
+# Returns: 200 OK
+# {
+#   "authenticated":true,
+#   "user_id":"alice",
+#   "role":"User",
+#   "message":"Welcome to your profile area!"
+# }
+----
+
+.verify authorization: Alice tries to access an ungranted route
+[source, bash]
+----
+curl -v http://127.0.0.1:8080/admin -b cookie_alice.txt
+
+# Authenticated, but fails the role check (alice's role is not admin).
+# Returns: 403 Forbidden -> Admin Access Required
+----
+
+.login bob
+[source, bash]
+----
+curl -v POST http://127.0.0.1:8080/login \
+     -H "Content-Type: application/json" \
+     -d '{"username":"bob", "password":"password321"}'\
+     -c cookie_bob.txt
+
+# Creates the session/identity cookie. 
+# -c: stores returned cookie in cookie_bob.txt
+# Returns: 200 OK
+# {
+#   "authenticated":true,
+#   "user_id":"bob",
+#   "role":"Admin",
+#   "message":"Login successful"
+# }
+
+----
+
+.checks Bob's authentication and granted access
+[source, bash]
+----
+curl -v http://127.0.0.1:8080/profile -b cookie_bob.txt
+
+# Authenticated and granted access to Bob's private profile
+# Returns: 200 OK
+# {
+#   "authenticated":true,
+#   "user_id":"bob",
+#   "role":"Admin",
+#   "message":"Welcome to your profile area!"
+# }
+
+----
+
+.verify authorization: Bob tries to access an proteced 'admin-only' route
+[source, bash]
+----
+curl -v http://127.0.0.1:8080/admin -b cookie_bob.txt
+
+# Returns: 200 OK 
+# {
+#   "authenticated":true,
+#   "user_id":"bob",
+#   "role":"Admin",
+#   "message":"Welcome to the restricted Admin Dashboard!"
+# }
+# Authenticated, and granted access to 'admin' protected area.
+----
+
+.logout Alice
+[source, bash]
+----
+curl -v -X POST http://127.0.0.1:8080/logout -b cookie_alice.txt -c cookie_alice.txt
+
+# User alice logs out successfully.
+# Returns: 200 OK
+# {
+#   "authenticated":false,
+#   "user_id":"alice",
+#   "role":"",
+#   "message":"User alice logged out."
+# }
+----
+
+.logout Bob
+[source, bash]
+----
+curl -v -X POST http://127.0.0.1:8080/logout -b cookie_bob.txt -c cookie_bob.txt
+
+# User bob logs out successfully
+# Returns:  200 OK
+# { 
+#   "authenticated":false,
+#   "user_id":"bob",
+#   "role":"",
+#   "message":"User bob logged out."
+# }
+----
+
+NOTE: *`-b cookies.txt`* → Reads cookies from the file cookies.txt and includes them in the request. At each test, we can check the cookie being upated in the cookie files: `cookie_<alice||bob>.txt`.
+
+
+*Design Benefits*: 
+
+- This centralizes the security policy. The application guarantees that if a handler takes an `AuthUser`, the user must be logged in. No handler can forget the check.
+
+- Handlers become pure business logic, increasing maintainability and testability.
+
+- Establishes a clean Authorization Guard pattern, making it trivial to secure routes based on user privileges without polluting the handler logic.
+
+In summary, the `Middleware` sets the stage by handling the session mechanics, while the `Extractor` steps in as the gatekeeper to enforce the security policy defined for each specific route.

@@ -6,4 +6,4 @@ cookie.txt
 .vscode/
 /tests
 .asciidoctor
-examples/actix_web_session_based_auth_advanced_middlware.rs
+/tmp
