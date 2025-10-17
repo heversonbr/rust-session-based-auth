@@ -244,6 +244,8 @@ async fn login(
 // Clears the session identity.
 // Does not require the AuthUser extractor because it needs to handle the case 
 // where the user attempts to log out but is already logged out.
+// In other words, use the Option<Identity> extractor for the /logout route, 
+// which must be robust enough to handle the non-authenticated case gracefully.
 #[post("/logout")]
 async fn logout(identity: Option<Identity>) -> impl Responder {
     debug!("Received logout request");
